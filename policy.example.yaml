@@ -1,0 +1,27 @@
+# Release policy — the approval boundary. A secret is released only to an
+# enclave whose fresh attestation document authenticates as the pinned
+# release; nothing the caller merely claims (repo string, network origin)
+# authorizes anything.
+workloads:
+  hello-world:
+    # The build allowed to receive these secrets: your workload repo and a
+    # pinned release tag. The document's Sigstore code artifact is
+    # authenticated against this repo's signing identity, and its release
+    # tag must equal the pin. Bump the tag to authorize a new release.
+    repo: org/hello-world
+    tag: v1.0.0
+
+    # Your deployment's domain. Requires the calling enclave's CA-issued
+    # certificate to be valid for it, so another deployment of the same
+    # (public) repo cannot receive your secrets. Recommended.
+    domain: hello-world.example.com
+
+    secrets:
+      # Secret name as declared in the container's `secrets:` list, mapped
+      # into the configured backend:
+      #   vault: KV v2 at VAULT_KV_MOUNT/data/VAULT_PREFIX/<path>, key <field>
+      #   aws:   Secrets Manager secret AWS_SECRETS_PREFIX/<path>, whose
+      #          value is a JSON key/value string with key <field>
+      DEMO_SECRET:
+        path: workloads/hello-world/demo
+        field: value
