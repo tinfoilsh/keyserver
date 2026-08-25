@@ -2,18 +2,14 @@
 
 Run your own keyserver and your Tinfoil Containers get secrets that Tinfoil
 never sees. The keyserver sits in front of your secret store (HashiCorp Vault
-or AWS Secrets Manager) and releases a secret only to an enclave that proves —
-with fresh hardware attestation — that it is running the exact release you
-pinned. Released values travel only into enclave memory and are never
-persisted.
+or AWS Secrets Manager) and releases a secret only to an enclave that proves that it is running the exact release you
+pinned.
 
 ## Quickstart
 
 ### 1. Run the keyserver
 
-Needs a publicly trusted TLS certificate on a real domain (enclaves verify it
-against system roots) and your policy. Attestation verification is fully
-offline — the only network the keyserver needs is to your secret store:
+Needs a public TLS certificate on a real domain and your policy.
 
 ```bash
 docker run -p 8443:8443 \
@@ -105,10 +101,3 @@ Every request must pass all of these, or nothing is released:
 - With a pinned `domain`, the caller's certificate must be CA-issued for it —
   someone else deploying the same public repo cannot qualify.
 
-## Development
-
-`go test ./...` exercises the full request path — the challenge flow,
-mutual-TLS key binding, release pinning, domain pinning, all-or-nothing
-release — with stub evidence, no hardware required. Testing against a live
-enclave requires a workload repo with an attested release, since a v3
-document cannot be built without one.
