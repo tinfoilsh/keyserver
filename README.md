@@ -1,14 +1,14 @@
-# Tinfoil Attested Secret Broker
+# Tinfoil Key Broker Service
 
-Run your own broker and your Tinfoil Containers get secrets that Tinfoil never
-sees. The broker sits in front of your secret store and releases a secret only
-to an enclave that proves it is running the exact release you pinned. This
-repository remains named `keyserver` for compatibility, but the protocol can
-release model keys, API credentials, or any other workload secret.
+Run your own Key Broker Service (KBS) and your Tinfoil Containers get secrets
+that Tinfoil never sees. The KBS sits in front of your secret store and releases
+a secret only to an enclave that proves it is running the exact release you
+pinned. Despite the established name, a KBS can release model keys, API
+credentials, or any other workload secret.
 
 ## Quickstart
 
-### 1. Run the broker
+### 1. Run the KBS
 
 Needs a public TLS certificate on a real domain and your policy.
 
@@ -99,7 +99,7 @@ directly at `vault-url` (the enclave refuses redirects).
 
 Every request must pass all of these, or nothing is released:
 
-- The nonce was issued by this broker, is unexpired, and is used once —
+- The nonce was issued by this KBS, is unexpired, and is used once —
   the attestation document is provably fresh.
 - The document verifies **offline** via the [Tinfoil SDK](https://github.com/tinfoilsh/tinfoil-go):
   the quote chains to the AMD/Intel roots (debug rejected), and the embedded
@@ -111,5 +111,5 @@ Every request must pass all of these, or nothing is released:
   someone else deploying the same public repo cannot qualify.
 
 `/challenge` itself is intentionally unauthenticated: a nonce grants no
-authority. The broker requires the client certificate at `/fetch`, where it
+authority. The KBS requires the client certificate at `/fetch`, where it
 binds the verified attestation to the channel carrying the secret response.
