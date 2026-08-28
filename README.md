@@ -1,13 +1,14 @@
-# Tinfoil Keyserver
+# Tinfoil Attested Secret Broker
 
-Run your own keyserver and your Tinfoil Containers get secrets that Tinfoil
-never sees. The keyserver sits in front of your secret store (HashiCorp Vault
-or AWS Secrets Manager) and releases a secret only to an enclave that proves that it is running the exact release you
-pinned.
+Run your own broker and your Tinfoil Containers get secrets that Tinfoil never
+sees. The broker sits in front of your secret store and releases a secret only
+to an enclave that proves it is running the exact release you pinned. This
+repository remains named `keyserver` for compatibility, but the protocol can
+release model keys, API credentials, or any other workload secret.
 
 ## Quickstart
 
-### 1. Run the keyserver
+### 1. Run the broker
 
 Needs a public TLS certificate on a real domain and your policy.
 
@@ -64,6 +65,14 @@ aws secretsmanager create-secret \
 Grant the keyserver only `secretsmanager:GetSecretValue` on
 `arn:aws:secretsmanager:<region>:<account>:secret:tinfoil/*`.
 
+**Local file** (`BACKEND=file`) — intended for examples and isolated
+deployments. `FILE_SECRETS_PATH` names a mode-`0600` JSON file loaded once at
+startup, with policy paths and fields represented directly:
+
+```json
+{"workloads/hello-world/demo":{"value":"hunter2"}}
+```
+
 ### 4. Wire your deployment
 
 In your measured `tinfoil-config.yml`:
@@ -90,7 +99,7 @@ directly at `vault-url` (the enclave refuses redirects).
 
 Every request must pass all of these, or nothing is released:
 
-- The nonce was issued by this keyserver, is unexpired, and is used once —
+- The nonce was issued by this broker, is unexpired, and is used once —
   the attestation document is provably fresh.
 - The document verifies **offline** via the [Tinfoil SDK](https://github.com/tinfoilsh/tinfoil-go):
   the quote chains to the AMD/Intel roots (debug rejected), and the embedded
@@ -101,3 +110,6 @@ Every request must pass all of these, or nothing is released:
 - With a pinned `domain`, the caller's certificate must be CA-issued for it —
   someone else deploying the same public repo cannot qualify.
 
+`/challenge` itself is intentionally unauthenticated: a nonce grants no
+authority. The broker requires the client certificate at `/fetch`, where it
+binds the verified attestation to the channel carrying the secret response.

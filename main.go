@@ -19,7 +19,7 @@ func main() {
 	tlsCert := flag.String("tls-cert", os.Getenv("TLS_CERT"), "server TLS certificate (publicly trusted; enclaves verify against system roots)")
 	tlsKey := flag.String("tls-key", os.Getenv("TLS_KEY"), "server TLS key")
 	policyPath := flag.String("policy", envDefault("POLICY_PATH", "policy.yaml"), "release policy file")
-	backend := flag.String("backend", envDefault("BACKEND", "vault"), "secret store backend: vault or aws")
+	backend := flag.String("backend", envDefault("BACKEND", "vault"), "secret store backend: vault, aws, or file")
 	flag.Parse()
 
 	policy, err := LoadPolicy(*policyPath)
@@ -38,8 +38,10 @@ func main() {
 		)
 	case "aws":
 		store, err = newAWSStore(context.Background(), os.Getenv("AWS_SECRETS_PREFIX"))
+	case "file":
+		store, err = newFileStore(os.Getenv("FILE_SECRETS_PATH"))
 	default:
-		log.Fatalf("keyserver: unknown backend %q (want vault or aws)", *backend)
+		log.Fatalf("keyserver: unknown backend %q (want vault, aws, or file)", *backend)
 	}
 	if err != nil {
 		log.Fatalf("keyserver: %v", err)
@@ -57,6 +59,9 @@ func main() {
 		log.Fatal("keyserver: -tls-cert and -tls-key are required (the protocol authenticates callers via the client certificate)")
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 	mux.HandleFunc("/challenge", gateway.handleChallenge)
 	mux.HandleFunc("/fetch", gateway.handleFetch)
 	httpServer := &http.Server{
@@ -65,9 +70,7 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 		TLSConfig: &tls.Config{
 			MinVersion: tls.VersionTLS12,
-			// Any client certificate is accepted at the handshake; possession
-			// of the attested key is enforced per-request against REPORT_DATA.
-			ClientAuth: tls.RequireAnyClientCert,
+			ClientAuth: tls.RequestClientCert,
 		},
 	}
 	log.Printf("keyserver listening on %s (policy %s)", *listen, *policyPath)
