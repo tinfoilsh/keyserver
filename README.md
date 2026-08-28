@@ -88,8 +88,7 @@ containers:
 At boot the enclave fetches `DEMO_SECRET` and injects it as an env var —
 fail-closed, so it never starts with the variable missing. Enclaves fetch at
 every boot; keep the keyserver reachable, serve `/challenge` and `/fetch`
-directly at `kbs-url` (the enclave refuses redirects). Legacy configurations
-using `vault-url` remain supported.
+directly at `kbs-url` (the enclave refuses redirects).
 
 ## How release is decided
 
