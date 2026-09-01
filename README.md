@@ -1,14 +1,14 @@
-# Tinfoil Key Broker Service
+# Tinfoil Keyserver
 
-Run your own Key Broker Service (KBS) and your Tinfoil Containers get secrets
-that Tinfoil never sees. The KBS sits in front of your secret store and releases
-a secret only to an enclave that proves it is running the exact release you
-pinned. Despite the established name, a KBS can release model keys, API
-credentials, or any other workload secret.
+Run your own keyserver and your Tinfoil Containers get secrets that Tinfoil
+never sees. The keyserver sits in front of your secret store (HashiCorp Vault,
+AWS Secrets Manager, or a local file for isolated deployments) and releases a
+secret only to an enclave that proves it is running the exact release you
+pinned.
 
 ## Quickstart
 
-### 1. Run the KBS
+### 1. Run the keyserver
 
 Needs a public TLS certificate on a real domain and your policy.
 
@@ -32,7 +32,7 @@ workloads:
   hello-world:
     repo: org/hello-world
     tag: v1.0.0
-    domain: hello-world.example.com  # your deployment's domain (recommended)
+    domain: hello-world.example.com  # ensures only this deployment can receive its secrets
     secrets:
       DEMO_SECRET: {path: workloads/hello-world/demo, field: value}
 ```
@@ -40,6 +40,10 @@ workloads:
 Launch with `debug: false` — debug-enabled enclaves are rejected.
 
 ### 3. Store the secret
+
+The keyserver supports HashiCorp Vault, AWS Secrets Manager, and a local file
+as secret backends. Choose one with `BACKEND` and store each policy entry in
+that backend using its configured path and field.
 
 **HashiCorp Vault** (`BACKEND=vault`) — reads KV v2 at
 `VAULT_KV_MOUNT/VAULT_PREFIX/<path>`, key `<field>`, with a read-only token:
@@ -78,7 +82,7 @@ startup, with policy paths and fields represented directly:
 In your measured `tinfoil-config.yml`:
 
 ```yaml
-kbs-url: https://keys.example.com
+keyserver-url: https://keys.example.com
 containers:
   - name: app
     image: ghcr.io/org/app@sha256:...
@@ -88,18 +92,18 @@ containers:
 At boot the enclave fetches `DEMO_SECRET` and injects it as an env var —
 fail-closed, so it never starts with the variable missing. Enclaves fetch at
 every boot; keep the keyserver reachable, serve `/challenge` and `/fetch`
-directly at `kbs-url` (the enclave refuses redirects).
+directly at `keyserver-url` (the enclave refuses redirects).
 
 ## How release is decided
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/protocol-dark.svg">
-  <img src="docs/protocol.svg" alt="Sequence diagram: the enclave requests a single-use nonce from the keyserver's /challenge endpoint, builds a fresh v3 attestation document over it, and POSTs /fetch over mutual TLS; the keyserver checks the nonce, verifies the document offline (quote to AMD/Intel roots, Sigstore-authenticated release of the pinned repo, debug rejected), requires the authenticated tag to equal the pin, the caller's TLS key to equal the endorsed key, and the caller's certificate to be CA-issued for the pinned domain, then reads the approved secrets from the customer store and returns them over the key-bound channel." width="820">
+  <img src="docs/protocol.svg" alt="Sequence diagram: the enclave requests a single-use nonce from the keyserver, attests over it, and POSTs /fetch with the attestation document; the keyserver verifies the attestation against the pinned release (any failed check means nothing is released), reads the approved secrets from the customer store, and returns them to the enclave where they are injected as environment variables." width="820">
 </picture>
 
 Every request must pass all of these, or nothing is released:
 
-- The nonce was issued by this KBS, is unexpired, and is used once —
+- The nonce was issued by this keyserver, is unexpired, and is used once —
   the attestation document is provably fresh.
 - The document verifies **offline** via the [Tinfoil SDK](https://github.com/tinfoilsh/tinfoil-go):
   the quote chains to the AMD/Intel roots (debug rejected), and the embedded
@@ -111,5 +115,5 @@ Every request must pass all of these, or nothing is released:
   someone else deploying the same public repo cannot qualify.
 
 `/challenge` itself is intentionally unauthenticated: a nonce grants no
-authority. The KBS requires the client certificate at `/fetch`, where it
+authority. The keyserver requires the client certificate at `/fetch`, where it
 binds the verified attestation to the channel carrying the secret response.
