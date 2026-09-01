@@ -31,7 +31,7 @@ workloads:
   hello-world:
     repo: org/hello-world
     tag: v1.0.0
-    domain: hello-world.example.com  # your deployment's domain (recommended)
+    domain: hello-world.example.com  # ensures only this deployment can receive its secrets
     secrets:
       DEMO_SECRET: {path: workloads/hello-world/demo, field: value}
 ```
@@ -39,6 +39,10 @@ workloads:
 Launch with `debug: false` — debug-enabled enclaves are rejected.
 
 ### 3. Store the secret
+
+The keyserver supports HashiCorp Vault and AWS Secrets Manager as secret
+backends. Choose one with `BACKEND` and store each policy entry in that
+backend using its configured path and field.
 
 **HashiCorp Vault** (`BACKEND=vault`) — reads KV v2 at
 `VAULT_KV_MOUNT/VAULT_PREFIX/<path>`, key `<field>`, with a read-only token:
