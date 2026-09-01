@@ -8,8 +8,8 @@
     </marker>
   </defs>
 
-  <rect x="20" y="2" width="170" height="458" rx="6" fill="none" stroke="#30363D" stroke-width="1" stroke-dasharray="4 4"/>
-  <rect x="310" y="2" width="490" height="458" rx="6" fill="none" stroke="#30363D" stroke-width="1" stroke-dasharray="4 4"/>
+  <rect x="20" y="2" width="170" height="458" rx="6" fill="none" stroke="#8B949E" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <rect x="310" y="2" width="490" height="458" rx="6" fill="none" stroke="#8B949E" stroke-width="1.5" stroke-dasharray="6 4"/>
 
   <text x="105" y="18" text-anchor="middle" font-size="10.5" letter-spacing="1" fill="#8B949E">Tinfoil infrastructure</text>
   <text x="555" y="18" text-anchor="middle" font-size="10.5" letter-spacing="1" fill="#8B949E">Customer infrastructure</text>
