@@ -1,8 +1,9 @@
 # Tinfoil Keyserver
 
 Run your own keyserver and your Tinfoil Containers get secrets that Tinfoil
-never sees. The keyserver sits in front of your secret store (HashiCorp Vault
-or AWS Secrets Manager) and releases a secret only to an enclave that proves that it is running the exact release you
+never sees. The keyserver sits in front of your secret store (HashiCorp Vault,
+AWS Secrets Manager, or a local file for isolated deployments) and releases a
+secret only to an enclave that proves it is running the exact release you
 pinned.
 
 ## Quickstart
@@ -40,9 +41,9 @@ Launch with `debug: false` — debug-enabled enclaves are rejected.
 
 ### 3. Store the secret
 
-The keyserver supports HashiCorp Vault and AWS Secrets Manager as secret
-backends. Choose one with `BACKEND` and store each policy entry in that
-backend using its configured path and field.
+The keyserver supports HashiCorp Vault, AWS Secrets Manager, and a local file
+as secret backends. Choose one with `BACKEND` and store each policy entry in
+that backend using its configured path and field.
 
 **HashiCorp Vault** (`BACKEND=vault`) — reads KV v2 at
 `VAULT_KV_MOUNT/VAULT_PREFIX/<path>`, key `<field>`, with a read-only token:
@@ -67,6 +68,14 @@ aws secretsmanager create-secret \
 
 Grant the keyserver only `secretsmanager:GetSecretValue` on
 `arn:aws:secretsmanager:<region>:<account>:secret:tinfoil/*`.
+
+**Local file** (`BACKEND=file`) — intended for examples and isolated
+deployments. `FILE_SECRETS_PATH` names a mode-`0600` JSON file loaded once at
+startup, with policy paths and fields represented directly:
+
+```json
+{"workloads/hello-world/demo":{"value":"hunter2"}}
+```
 
 ### 4. Wire your deployment
 
@@ -105,3 +114,6 @@ Every request must pass all of these, or nothing is released:
 - With a pinned `domain`, the caller's certificate must be CA-issued for it —
   someone else deploying the same public repo cannot qualify.
 
+`/challenge` itself is intentionally unauthenticated: a nonce grants no
+authority. The keyserver requires the client certificate at `/fetch`, where it
+binds the verified attestation to the channel carrying the secret response.
