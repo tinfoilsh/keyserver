@@ -10,7 +10,9 @@ pinned.
 
 ### 1. Run the keyserver
 
-Needs a public TLS certificate on a real domain and your policy.
+Needs a public TLS certificate on a real domain and your policy. The
+certificate must be CA-issued (for example Let's Encrypt) — enclaves verify
+it against system roots, so a self-signed certificate will not work.
 
 ```bash
 docker run -p 8443:8443 \
@@ -92,7 +94,14 @@ containers:
 At boot the enclave fetches `DEMO_SECRET` and injects it as an env var —
 fail-closed, so it never starts with the variable missing. Enclaves fetch at
 every boot; keep the keyserver reachable, serve `/challenge` and `/fetch`
-directly at `keyserver-url` (the enclave refuses redirects).
+directly at `keyserver-url` (the enclave refuses redirects). A `/health`
+endpoint is available for load-balancer probes.
+
+The `repo` and `tag` in your policy refer to the deployment's config
+repository and its released tag — the same release you select in the Tinfoil
+dashboard — not the Docker image. Any secret listed in a container's
+`secrets:` that Tinfoil's own secret store does not populate is requested
+from the keyserver, and the names must match your policy's `secrets` keys.
 
 ## How release is decided
 
