@@ -16,6 +16,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 )
@@ -89,7 +90,78 @@ func newIdentity(t *testing.T, template *x509.Certificate, parent *x509.Certific
 	}
 }
 
+// testCA stands in for the public CA that issues a deployment's certificate
+// for its domain; the gateway under test trusts it as its only root.
+type testCA struct {
+	cert  *x509.Certificate
+	key   *ecdsa.PrivateKey
+	roots *x509.CertPool
+}
+
+var (
+	caOnce sync.Once
+	ca     *testCA
+	caErr  error
+)
+
+func trustedCA(t *testing.T) *testCA {
+	t.Helper()
+	caOnce.Do(func() {
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			caErr = err
+			return
+		}
+		template := &x509.Certificate{
+			SerialNumber:          big.NewInt(1),
+			Subject:               pkix.Name{CommonName: "test-ca"},
+			NotBefore:             time.Now().Add(-time.Hour),
+			NotAfter:              time.Now().Add(time.Hour),
+			IsCA:                  true,
+			KeyUsage:              x509.KeyUsageCertSign,
+			BasicConstraintsValid: true,
+		}
+		der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+		if err != nil {
+			caErr = err
+			return
+		}
+		cert, err := x509.ParseCertificate(der)
+		if err != nil {
+			caErr = err
+			return
+		}
+		roots := x509.NewCertPool()
+		roots.AddCert(cert)
+		ca = &testCA{cert: cert, key: key, roots: roots}
+	})
+	if caErr != nil {
+		t.Fatal(caErr)
+	}
+	return ca
+}
+
+const testDomain = "hello.test"
+
+// issuedIdentity is an enclave whose certificate the trusted CA issued for
+// domain, as a real deployment's public certificate is.
+func issuedIdentity(t *testing.T, domain string) *enclaveIdentity {
+	ca := trustedCA(t)
+	return newIdentity(t, &x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject:      pkix.Name{CommonName: domain},
+		DNSNames:     []string{domain},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+	}, ca.cert, ca.key)
+}
+
+// newEnclaveIdentity mimics the pinned deployment itself.
 func newEnclaveIdentity(t *testing.T) *enclaveIdentity {
+	return issuedIdentity(t, testDomain)
+}
+
+func newSelfSignedIdentity(t *testing.T) *enclaveIdentity {
 	return newIdentity(t, &x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject:      pkix.Name{CommonName: "enclave-test"},
@@ -110,8 +182,9 @@ func (e *enclaveIdentity) document(t *testing.T, repo, tag, nonce string) json.R
 func testPolicy() *Policy {
 	return &Policy{Workloads: map[string]*Workload{
 		"hello": {
-			Repo: "org/hello",
-			Tag:  "v1.0.0",
+			Repo:   "org/hello",
+			Tag:    "v1.0.0",
+			Domain: testDomain,
 			Secrets: map[string]*SecretRef{
 				"DEMO_SECRET": {Path: "hello/demo", Field: "value"},
 				"MISSING":     {Path: "hello/missing", Field: "value"},
@@ -124,6 +197,9 @@ func startGatewayWith(t *testing.T, gateway *server) *httptest.Server {
 	t.Helper()
 	if gateway.nonces == nil {
 		gateway.nonces = newNonceStore()
+	}
+	if gateway.roots == nil {
+		gateway.roots = trustedCA(t).roots
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/challenge", gateway.handleChallenge)
@@ -321,48 +397,7 @@ func TestFetchAllOrNothingOnStoreMiss(t *testing.T) {
 }
 
 func TestFetchDomainPin(t *testing.T) {
-	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	caTemplate := &x509.Certificate{
-		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "test-ca"},
-		NotBefore:             time.Now().Add(-time.Hour),
-		NotAfter:              time.Now().Add(time.Hour),
-		IsCA:                  true,
-		KeyUsage:              x509.KeyUsageCertSign,
-		BasicConstraintsValid: true,
-	}
-	caDER, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, &caKey.PublicKey, caKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	caCert, err := x509.ParseCertificate(caDER)
-	if err != nil {
-		t.Fatal(err)
-	}
-	roots := x509.NewCertPool()
-	roots.AddCert(caCert)
-
-	issued := func(domain string) *enclaveIdentity {
-		return newIdentity(t, &x509.Certificate{
-			SerialNumber: big.NewInt(2),
-			Subject:      pkix.Name{CommonName: domain},
-			DNSNames:     []string{domain},
-			NotBefore:    time.Now().Add(-time.Hour),
-			NotAfter:     time.Now().Add(time.Hour),
-		}, caCert, caKey)
-	}
-
-	policy := testPolicy()
-	policy.Workloads["hello"].Domain = "hello.test"
-	ts := startGatewayWith(t, &server{
-		verifier: stubVerifier{},
-		policy:   policy,
-		store:    mapStore{"hello/demo": {"value": "hunter2"}},
-		roots:    roots,
-	})
+	ts := startGateway(t)
 
 	request := func(id *enclaveIdentity) int {
 		nonce := challengeAs(t, ts, id)
@@ -375,13 +410,13 @@ func TestFetchDomainPin(t *testing.T) {
 		return resp.StatusCode
 	}
 
-	if status := request(issued("hello.test")); status != http.StatusOK {
+	if status := request(issuedIdentity(t, testDomain)); status != http.StatusOK {
 		t.Fatalf("CA-issued cert for pinned domain: status = %d", status)
 	}
-	if status := request(issued("other.test")); status != http.StatusForbidden {
+	if status := request(issuedIdentity(t, "other.test")); status != http.StatusForbidden {
 		t.Fatalf("CA-issued cert for wrong domain: status = %d, want 403", status)
 	}
-	if status := request(newEnclaveIdentity(t)); status != http.StatusForbidden {
+	if status := request(newSelfSignedIdentity(t)); status != http.StatusForbidden {
 		t.Fatalf("self-signed cert: status = %d, want 403", status)
 	}
 }

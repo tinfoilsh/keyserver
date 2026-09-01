@@ -23,21 +23,27 @@ docker run -p 8443:8443 \
 
 ### 2. Write your policy
 
-`policy.yaml` pins which build may receive which secrets: your workload repo
-and a release tag. The enclave's attestation document is authenticated
-against that repo's Sigstore signing identity — the same verification
-Tinfoil SDK clients do — and its release tag must equal the pin. Bump the tag
-to authorize a new release. See `policy.example.yaml`.
+`policy.yaml` pins which build may receive which secrets: your workload repo,
+a release tag, and the domain your deployment is served at. The enclave's
+attestation document is authenticated against that repo's Sigstore signing
+identity — the same verification Tinfoil SDK clients do — and its release tag
+must equal the pin. Bump the tag to authorize a new release. See
+`policy.example.yaml`.
 
 ```yaml
 workloads:
   hello-world:
     repo: org/hello-world
     tag: v1.0.0
-    domain: hello-world.example.com  # ensures only this deployment can receive its secrets
+    domain: hello-world.example.com  # only an enclave serving this domain qualifies
     secrets:
       DEMO_SECRET: {path: workloads/hello-world/demo, field: value}
 ```
+
+`domain` is required. Config repos are public, so anyone can deploy your exact
+repo and tag and produce an identical, validly attested enclave; the domain pin
+is what makes the secrets yours. The caller must present a certificate a public
+CA issued for that domain, which only your deployment holds.
 
 Launch with `debug: false` — debug-enabled enclaves are rejected.
 
@@ -120,7 +126,7 @@ Every request must pass all of these, or nothing is released:
   authenticated tag must equal the pinned tag.
 - The caller's TLS key matches the key endorsed inside the document, so a
   captured or relayed attestation is useless.
-- With a pinned `domain`, the caller's certificate must be CA-issued for it —
+- The caller's certificate must be CA-issued for the pinned `domain` —
   someone else deploying the same public repo cannot qualify.
 
 `/challenge` itself is intentionally unauthenticated: a nonce grants no

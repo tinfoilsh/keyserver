@@ -22,11 +22,11 @@ type Workload struct {
 	Repo string `yaml:"repo"`
 	Tag  string `yaml:"tag"`
 
-	// Domain, when set, additionally requires the caller's TLS certificate
-	// to be CA-issued for this domain. This is what stops someone else who
-	// deploys the same public repo (identical attested build) from receiving
-	// this workload's secrets.
-	Domain string `yaml:"domain,omitempty"`
+	// Domain requires the caller's TLS certificate to be CA-issued for the
+	// deployment's domain. Required: someone else deploying the same public
+	// repo produces an identical attested build, and this is what tells
+	// them apart.
+	Domain string `yaml:"domain"`
 
 	Secrets map[string]*SecretRef `yaml:"secrets"`
 }
@@ -50,8 +50,8 @@ func LoadPolicy(path string) (*Policy, error) {
 	}
 	pinned := map[string]string{}
 	for name, w := range policy.Workloads {
-		if w == nil || w.Repo == "" || w.Tag == "" {
-			return nil, fmt.Errorf("workload %q needs repo and tag", name)
+		if w == nil || w.Repo == "" || w.Tag == "" || w.Domain == "" {
+			return nil, fmt.Errorf("workload %q needs repo, tag, and domain", name)
 		}
 		pin := w.Repo + "@" + w.Tag
 		if other, taken := pinned[pin]; taken {

@@ -60,11 +60,12 @@ func TestLoadPolicy(t *testing.T) {
 func TestLoadPolicyRejectsIncomplete(t *testing.T) {
 	cases := map[string]string{
 		"no workloads":   "workloads: {}",
-		"no repo":        "workloads:\n  w:\n    tag: v1\n    secrets:\n      A: {path: p, field: f}",
-		"no tag":         "workloads:\n  w:\n    repo: org/x\n    secrets:\n      A: {path: p, field: f}",
-		"no secrets":     "workloads:\n  w:\n    repo: org/x\n    tag: v1",
-		"bad secret ref": "workloads:\n  w:\n    repo: org/x\n    tag: v1\n    secrets:\n      A: {path: p}",
-		"duplicate pin":  "workloads:\n  a:\n    repo: org/x\n    tag: v1\n    secrets:\n      A: {path: p, field: f}\n  b:\n    repo: org/x\n    tag: v1\n    secrets:\n      B: {path: q, field: f}",
+		"no repo":        "workloads:\n  w:\n    tag: v1\n    domain: d\n    secrets:\n      A: {path: p, field: f}",
+		"no tag":         "workloads:\n  w:\n    repo: org/x\n    domain: d\n    secrets:\n      A: {path: p, field: f}",
+		"no domain":      "workloads:\n  w:\n    repo: org/x\n    tag: v1\n    secrets:\n      A: {path: p, field: f}",
+		"no secrets":     "workloads:\n  w:\n    repo: org/x\n    tag: v1\n    domain: d",
+		"bad secret ref": "workloads:\n  w:\n    repo: org/x\n    tag: v1\n    domain: d\n    secrets:\n      A: {path: p}",
+		"duplicate pin":  "workloads:\n  a:\n    repo: org/x\n    tag: v1\n    domain: d\n    secrets:\n      A: {path: p, field: f}\n  b:\n    repo: org/x\n    tag: v1\n    domain: d\n    secrets:\n      B: {path: q, field: f}",
 	}
 	for name, content := range cases {
 		path := filepath.Join(t.TempDir(), "policy.yaml")
