@@ -69,7 +69,7 @@ Grant the keyserver only `secretsmanager:GetSecretValue` on
 In your measured `tinfoil-config.yml`:
 
 ```yaml
-vault-url: https://keys.example.com
+keyserver-url: https://keys.example.com
 containers:
   - name: app
     image: ghcr.io/org/app@sha256:...
@@ -79,7 +79,7 @@ containers:
 At boot the enclave fetches `DEMO_SECRET` and injects it as an env var —
 fail-closed, so it never starts with the variable missing. Enclaves fetch at
 every boot; keep the keyserver reachable, serve `/challenge` and `/fetch`
-directly at `vault-url` (the enclave refuses redirects).
+directly at `keyserver-url` (the enclave refuses redirects).
 
 ## How release is decided
 
