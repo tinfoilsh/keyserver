@@ -11,9 +11,10 @@ workloads:
     repo: org/hello-world
     tag: v1.0.0
 
-    # Your deployment's domain. Requires the calling enclave's CA-issued
-    # certificate to be valid for it, so another deployment of the same
-    # (public) repo cannot receive your secrets. Recommended.
+    # The domain your deployment is served at. Required: config repos are
+    # public, so another deployment of the same repo@tag attests identically,
+    # and only the enclave holding a CA-issued certificate for this domain
+    # qualifies.
     domain: hello-world.example.com
 
     secrets:

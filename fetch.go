@@ -81,12 +81,10 @@ func (s *server) handleFetch(w http.ResponseWriter, r *http.Request) {
 		s.deny(w, r, req.Repo, http.StatusForbidden, err)
 		return
 	}
-	if workload.Domain != "" {
-		if err := verifyPeerDomain(r.TLS, workload.Domain, s.roots); err != nil {
-			s.deny(w, r, req.Repo, http.StatusForbidden,
-				fmt.Errorf("caller certificate not valid for pinned domain %q: %w", workload.Domain, err))
-			return
-		}
+	if err := verifyPeerDomain(r.TLS, workload.Domain, s.roots); err != nil {
+		s.deny(w, r, req.Repo, http.StatusForbidden,
+			fmt.Errorf("caller certificate not valid for pinned domain %q: %w", workload.Domain, err))
+		return
 	}
 	release, err := workload.Authorize(name, req.SecretRefs)
 	if err != nil {
