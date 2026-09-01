@@ -73,7 +73,7 @@ Grant the keyserver only `secretsmanager:GetSecretValue` on
 In your measured `tinfoil-config.yml`:
 
 ```yaml
-vault-url: https://keys.example.com
+keyserver-url: https://keys.example.com
 containers:
   - name: app
     image: ghcr.io/org/app@sha256:...
@@ -83,13 +83,13 @@ containers:
 At boot the enclave fetches `DEMO_SECRET` and injects it as an env var —
 fail-closed, so it never starts with the variable missing. Enclaves fetch at
 every boot; keep the keyserver reachable, serve `/challenge` and `/fetch`
-directly at `vault-url` (the enclave refuses redirects).
+directly at `keyserver-url` (the enclave refuses redirects).
 
 ## How release is decided
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/protocol-dark.svg">
-  <img src="docs/protocol.svg" alt="Sequence diagram: the enclave requests a single-use nonce from the keyserver's /challenge endpoint, builds a fresh v3 attestation document over it, and POSTs /fetch over mutual TLS; the keyserver checks the nonce, verifies the document offline (quote to AMD/Intel roots, Sigstore-authenticated release of the pinned repo, debug rejected), requires the authenticated tag to equal the pin, the caller's TLS key to equal the endorsed key, and the caller's certificate to be CA-issued for the pinned domain, then reads the approved secrets from the customer store and returns them over the key-bound channel." width="820">
+  <img src="docs/protocol.svg" alt="Sequence diagram: the enclave requests a single-use nonce from the keyserver, attests over it, and POSTs /fetch with the attestation document; the keyserver verifies the attestation against the pinned release (any failed check means nothing is released), reads the approved secrets from the customer store, and returns them to the enclave where they are injected as environment variables." width="820">
 </picture>
 
 Every request must pass all of these, or nothing is released:
