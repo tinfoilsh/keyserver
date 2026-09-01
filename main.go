@@ -70,6 +70,9 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 		TLSConfig: &tls.Config{
 			MinVersion: tls.VersionTLS12,
+			// The handshake does not gate access: /fetch independently
+			// requires a client certificate and matches its key against the
+			// verified attestation document before releasing anything.
 			ClientAuth: tls.RequestClientCert,
 		},
 	}
