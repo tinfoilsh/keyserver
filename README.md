@@ -18,7 +18,7 @@ it against system roots, so a self-signed certificate will not work.
 docker run -p 8443:8443 \
   -v $PWD/policy.yaml:/policy.yaml -v $PWD/tls:/tls \
   -e BACKEND=vault -e VAULT_ADDR=... -e VAULT_TOKEN=... -e VAULT_PREFIX=tinfoil \
-  ghcr.io/tinfoilsh/keyserver -policy /policy.yaml -tls-cert /tls/cert.pem -tls-key /tls/key.pem
+  ghcr.io/tinfoilsh/keyserver:v0.0.2 -policy /policy.yaml -tls-cert /tls/cert.pem -tls-key /tls/key.pem
 ```
 
 ### 2. Write your policy
@@ -45,7 +45,9 @@ repo and tag and produce an identical, validly attested enclave; the domain pin
 is what makes the secrets yours. The caller must present a certificate a public
 CA issued for that domain, which only your deployment holds.
 
-Launch with `debug: false` — debug-enabled enclaves are rejected.
+Debug enclaves never receive secrets from the keyserver: in debug mode the
+enclave ignores `keyserver-url` and takes host-supplied values instead, and
+the verifier rejects debug attestations regardless.
 
 ### 3. Store the secret
 
@@ -90,6 +92,7 @@ startup, with policy paths and fields represented directly:
 In your measured `tinfoil-config.yml`:
 
 ```yaml
+cvm-version: 0.13.0
 keyserver-url: https://keys.example.com
 containers:
   - name: app
@@ -97,8 +100,11 @@ containers:
     secrets: [DEMO_SECRET]
 ```
 
-At boot the enclave fetches `DEMO_SECRET` and injects it as an env var —
-fail-closed, so it never starts with the variable missing. Enclaves fetch at
+Setting `keyserver-url` makes the keyserver the only source of secrets for
+the deployment: at boot the enclave fetches every declared secret and injects
+each as an env var, and a value supplied by the host for a declared name fails
+the boot instead of being merged. Delivery is fail-closed, so the workload
+never starts with a variable missing. Enclaves fetch at
 every boot; keep the keyserver reachable, serve `/challenge` and `/fetch`
 directly at `keyserver-url` (the enclave refuses redirects). A `/health`
 endpoint is available for load-balancer probes.
