@@ -19,14 +19,15 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/tinfoilsh/tinfoil-go/verifier/client"
+	"github.com/tinfoilsh/tinfoil-go/verifier/document"
 )
 
-// stubVerifier stands in for the SDK's v3 verification, enforcing the same
+// stubVerify stands in for the SDK's v3 verification, enforcing the same
 // contract: the document must carry the server-issued nonce and authenticate
 // as a release of the trusted repo. Handler tests exercise the real mTLS
 // binding, nonce, and policy paths without hardware evidence.
-type stubVerifier struct{}
-
 type stubDocument struct {
 	Repo     string `json:"repo"`
 	Tag      string `json:"tag"`
@@ -34,9 +35,9 @@ type stubDocument struct {
 	TLSKeyFP string `json:"tls_key_fp"`
 }
 
-func (stubVerifier) Verify(document, nonce []byte, repo string) (*verified, error) {
+func stubVerify(raw, nonce []byte, repo string, _ *client.VerificationOptions) (*client.VerifiedDocumentV3, error) {
 	var doc stubDocument
-	if err := json.Unmarshal(document, &doc); err != nil {
+	if err := json.Unmarshal(raw, &doc); err != nil {
 		return nil, fmt.Errorf("stub: %w", err)
 	}
 	if doc.Nonce != hex.EncodeToString(nonce) {
@@ -45,7 +46,10 @@ func (stubVerifier) Verify(document, nonce []byte, repo string) (*verified, erro
 	if doc.Repo != repo {
 		return nil, fmt.Errorf("stub: document does not authenticate as a release of %s", repo)
 	}
-	return &verified{Tag: doc.Tag, TLSKeyFP: doc.TLSKeyFP}, nil
+	return &client.VerifiedDocumentV3{
+		CodeTag:        doc.Tag,
+		CryptoMaterial: []document.CryptoMaterialItem{{ID: document.CryptoMaterialIDTLS, Format: document.KeySPKIFPSHA256V1Format, Data: doc.TLSKeyFP}},
+	}, nil
 }
 
 // mapStore is an in-memory secretStore for tests: {path: {field: value}}.
@@ -213,9 +217,9 @@ func startGatewayWith(t *testing.T, gateway *server) *httptest.Server {
 
 func startGateway(t *testing.T) *httptest.Server {
 	return startGatewayWith(t, &server{
-		verifier: stubVerifier{},
-		policy:   testPolicy(),
-		store:    mapStore{"hello/demo": {"value": "hunter2"}},
+		verify: stubVerify,
+		policy: testPolicy(),
+		store:  mapStore{"hello/demo": {"value": "hunter2"}},
 	})
 }
 
