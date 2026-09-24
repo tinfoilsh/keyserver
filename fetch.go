@@ -11,6 +11,8 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/tinfoilsh/tinfoil-go/verifier/client"
 )
 
 // Documents embed all verification collateral, so requests run to megabytes.
@@ -28,10 +30,10 @@ type fetchRequest struct {
 }
 
 type server struct {
-	verifier documentVerifier
-	policy   *Policy
-	store    secretStore
-	nonces   *nonceStore
+	verify func(document, nonce []byte, repo string, opts *client.VerificationOptions) (*client.VerifiedDocumentV3, error)
+	policy *Policy
+	store  secretStore
+	nonces *nonceStore
 	// roots overrides the system roots for domain-pin verification (tests).
 	roots *x509.CertPool
 }
@@ -66,18 +68,18 @@ func (s *server) handleFetch(w http.ResponseWriter, r *http.Request) {
 		s.deny(w, r, req.Repo, http.StatusForbidden, fmt.Errorf("repository is not pinned by any workload"))
 		return
 	}
-	proof, err := s.verifier.Verify(req.Document, nonce, req.Repo)
+	proof, err := s.verify(req.Document, nonce, req.Repo, nil)
 	if err != nil {
 		s.deny(w, r, req.Repo, http.StatusForbidden, err)
 		return
 	}
-	name, workload := s.policy.Match(req.Repo, proof.Tag)
+	name, workload := s.policy.Match(req.Repo, proof.CodeTag)
 	if workload == nil {
 		s.deny(w, r, req.Repo, http.StatusForbidden,
-			fmt.Errorf("release %s@%s is not pinned by any workload", req.Repo, proof.Tag))
+			fmt.Errorf("release %s@%s is not pinned by any workload", req.Repo, proof.CodeTag))
 		return
 	}
-	if err := verifyKeyBinding(r.TLS.PeerCertificates[0], proof.TLSKeyFP); err != nil {
+	if err := verifyKeyBinding(r.TLS.PeerCertificates[0], proof); err != nil {
 		s.deny(w, r, req.Repo, http.StatusForbidden, err)
 		return
 	}
@@ -103,7 +105,7 @@ func (s *server) handleFetch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("release workload=%s release=%s@%s secrets=%v remote=%s",
-		name, req.Repo, proof.Tag, req.SecretRefs, r.RemoteAddr)
+		name, req.Repo, proof.CodeTag, req.SecretRefs, r.RemoteAddr)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(secrets)
 }
@@ -113,7 +115,11 @@ func (s *server) handleFetch(w http.ResponseWriter, r *http.Request) {
 // captured or relayed attestation useless — the response only flows over a
 // channel keyed by the endorsed private key, which never leaves enclave
 // memory.
-func verifyKeyBinding(cert *x509.Certificate, attestedFP string) error {
+func verifyKeyBinding(cert *x509.Certificate, proof *client.VerifiedDocumentV3) error {
+	attestedFP, err := proof.TLSPublicKeyFP()
+	if err != nil {
+		return err
+	}
 	spki, err := x509.MarshalPKIXPublicKey(cert.PublicKey)
 	if err != nil {
 		return fmt.Errorf("encoding client public key: %w", err)

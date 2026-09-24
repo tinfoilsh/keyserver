@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/tinfoilsh/tinfoil-go/verifier/client"
 )
 
 func main() {
@@ -49,10 +51,10 @@ func main() {
 	log.Printf("secret store backend: %s", *backend)
 
 	gateway := &server{
-		verifier: sdkVerifier{},
-		policy:   policy,
-		store:    store,
-		nonces:   newNonceStore(),
+		verify: client.VerifyDocumentV3,
+		policy: policy,
+		store:  store,
+		nonces: newNonceStore(),
 	}
 
 	if *tlsCert == "" || *tlsKey == "" {

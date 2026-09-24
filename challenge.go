@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tinfoilsh/tinfoil-go/verifier/envelope"
+	"github.com/tinfoilsh/tinfoil-go/verifier/document"
 )
 
 const (
@@ -29,9 +29,9 @@ func newNonceStore() *nonceStore {
 	return &nonceStore{now: time.Now, issued: map[string]time.Time{}}
 }
 
-// Issue returns a fresh lowercase-hex nonce of envelope.NonceSize bytes.
+// Issue returns a fresh lowercase-hex nonce of document.NonceSize bytes.
 func (s *nonceStore) Issue() (string, error) {
-	nonce, err := envelope.RandomNonce()
+	nonce, err := document.RandomNonce()
 	if err != nil {
 		return "", fmt.Errorf("generating nonce: %w", err)
 	}
@@ -49,7 +49,7 @@ func (s *nonceStore) Issue() (string, error) {
 // Consume redeems an issued, unexpired nonce exactly once.
 func (s *nonceStore) Consume(encoded string) ([]byte, error) {
 	nonce, err := hex.DecodeString(encoded)
-	if err != nil || len(nonce) != envelope.NonceSize {
+	if err != nil || len(nonce) != document.NonceSize {
 		return nil, fmt.Errorf("malformed nonce")
 	}
 	s.mu.Lock()
