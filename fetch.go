@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/tinfoilsh/tinfoil-go/verifier/client"
+	"github.com/tinfoilsh/tinfoil-go/verify"
 )
 
 // Documents embed all verification collateral, so requests run to megabytes.
@@ -30,7 +30,7 @@ type fetchRequest struct {
 }
 
 type server struct {
-	verify func(document, nonce []byte, repo string, opts *client.VerificationOptions) (*client.VerifiedDocumentV3, error)
+	verify func(document, nonce []byte, repo string) (*verify.Verification, error)
 	policy *Policy
 	store  secretStore
 	nonces *nonceStore
@@ -68,9 +68,13 @@ func (s *server) handleFetch(w http.ResponseWriter, r *http.Request) {
 		s.deny(w, r, req.Repo, http.StatusForbidden, fmt.Errorf("repository is not pinned by any workload"))
 		return
 	}
-	proof, err := s.verify(req.Document, nonce, req.Repo, nil)
+	proof, err := s.verify(req.Document, nonce, req.Repo)
 	if err != nil {
 		s.deny(w, r, req.Repo, http.StatusForbidden, err)
+		return
+	}
+	if proof.Config != nil {
+		s.deny(w, r, req.Repo, http.StatusForbidden, fmt.Errorf("keyserver policy requires a GitHub release; registry configs are not supported"))
 		return
 	}
 	name, workload := s.policy.Match(req.Repo, proof.CodeTag)
@@ -115,7 +119,7 @@ func (s *server) handleFetch(w http.ResponseWriter, r *http.Request) {
 // captured or relayed attestation useless — the response only flows over a
 // channel keyed by the endorsed private key, which never leaves enclave
 // memory.
-func verifyKeyBinding(cert *x509.Certificate, proof *client.VerifiedDocumentV3) error {
+func verifyKeyBinding(cert *x509.Certificate, proof *verify.Verification) error {
 	attestedFP, err := proof.TLSPublicKeyFP()
 	if err != nil {
 		return err
