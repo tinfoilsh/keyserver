@@ -12,7 +12,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/tinfoilsh/tinfoil-go/verifier/client"
+	"github.com/tinfoilsh/tinfoil-go/verify"
 )
 
 func main() {
@@ -50,8 +50,12 @@ func main() {
 	}
 	log.Printf("secret store backend: %s", *backend)
 
+	verifier, err := verify.NewVerifier()
+	if err != nil {
+		log.Fatalf("keyserver: %v", err)
+	}
 	gateway := &server{
-		verify: client.VerifyDocumentV3,
+		verify: verifier.VerifyV3,
 		policy: policy,
 		store:  store,
 		nonces: newNonceStore(),

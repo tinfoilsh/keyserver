@@ -20,8 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tinfoilsh/tinfoil-go/verifier/client"
-	"github.com/tinfoilsh/tinfoil-go/verifier/document"
+	"github.com/tinfoilsh/tinfoil-go/document"
+	"github.com/tinfoilsh/tinfoil-go/verify"
 )
 
 // stubVerify stands in for the SDK's v3 verification, enforcing the same
@@ -35,7 +35,7 @@ type stubDocument struct {
 	TLSKeyFP string `json:"tls_key_fp"`
 }
 
-func stubVerify(raw, nonce []byte, repo string, _ *client.VerificationOptions) (*client.VerifiedDocumentV3, error) {
+func stubVerify(raw, nonce []byte, repo string) (*verify.Verification, error) {
 	var doc stubDocument
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return nil, fmt.Errorf("stub: %w", err)
@@ -46,7 +46,7 @@ func stubVerify(raw, nonce []byte, repo string, _ *client.VerificationOptions) (
 	if doc.Repo != repo {
 		return nil, fmt.Errorf("stub: document does not authenticate as a release of %s", repo)
 	}
-	return &client.VerifiedDocumentV3{
+	return &verify.Verification{
 		CodeTag:        doc.Tag,
 		CryptoMaterial: []document.CryptoMaterialItem{{ID: document.CryptoMaterialIDTLS, Format: document.KeySPKIFPSHA256V1Format, Data: doc.TLSKeyFP}},
 	}, nil
@@ -346,6 +346,32 @@ func TestFetchRejectsUnpinnedTag(t *testing.T) {
 		SecretRefs: []string{"DEMO_SECRET"},
 		Nonce:      nonce,
 		Document:   id.document(t, "org/hello", "v0.9.0", nonce),
+	})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", resp.StatusCode)
+	}
+}
+
+func TestFetchRejectsRegistryConfigWithPinnedRuntimeTag(t *testing.T) {
+	ts := startGatewayWith(t, &server{
+		verify: func(raw, nonce []byte, repo string) (*verify.Verification, error) {
+			proof, err := stubVerify(raw, nonce, repo)
+			if err != nil {
+				return nil, err
+			}
+			proof.Config = &verify.ConfigVerification{Name: "/org/hello/v2.0.0"}
+			return proof, nil
+		},
+		policy: testPolicy(),
+		store:  mapStore{"hello/demo": {"value": "hunter2"}},
+	})
+	id := newEnclaveIdentity(t)
+	nonce := challengeAs(t, ts, id)
+	resp, _ := fetchAs(t, ts, id, fetchRequest{
+		Repo:       "org/hello",
+		SecretRefs: []string{"DEMO_SECRET"},
+		Nonce:      nonce,
+		Document:   id.document(t, "org/hello", "v1.0.0", nonce),
 	})
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403", resp.StatusCode)
