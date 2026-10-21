@@ -18,7 +18,7 @@ it against system roots, so a self-signed certificate will not work.
 docker run -p 8443:8443 \
   -v $PWD/policy.yaml:/policy.yaml -v $PWD/tls:/tls \
   -e BACKEND=vault -e VAULT_ADDR=... -e VAULT_TOKEN=... -e VAULT_PREFIX=tinfoil \
-  ghcr.io/tinfoilsh/keyserver:v0.0.2 -policy /policy.yaml -tls-cert /tls/cert.pem -tls-key /tls/key.pem
+  ghcr.io/tinfoilsh/keyserver:v0.0.4 -policy /policy.yaml -tls-cert /tls/cert.pem -tls-key /tls/key.pem
 ```
 
 ### 2. Write your policy
