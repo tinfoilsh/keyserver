@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tinfoilsh/tinfoil-go/document"
+	"github.com/tinfoilsh/tinfoil-go/verify/document"
 )
 
 const (

@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.43.6
 	github.com/aws/aws-sdk-go-v2/config v1.32.37
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.44.6
-	github.com/tinfoilsh/tinfoil-go v0.17.0-rc.2
+	github.com/tinfoilsh/tinfoil-go v0.17.0-rc.4
 	gopkg.in/yaml.v3 v3.0.1
 )
 
