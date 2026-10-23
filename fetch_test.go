@@ -20,8 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tinfoilsh/tinfoil-go/document"
 	"github.com/tinfoilsh/tinfoil-go/verify"
+	"github.com/tinfoilsh/tinfoil-go/verify/document"
 )
 
 // stubVerify stands in for the SDK's v3 verification, enforcing the same

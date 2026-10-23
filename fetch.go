@@ -120,9 +120,9 @@ func (s *server) handleFetch(w http.ResponseWriter, r *http.Request) {
 // channel keyed by the endorsed private key, which never leaves enclave
 // memory.
 func verifyKeyBinding(cert *x509.Certificate, proof *verify.Verification) error {
-	attestedFP, err := proof.TLSPublicKeyFP()
-	if err != nil {
-		return err
+	attestedFP, ok := proof.TLSPublicKeyFP()
+	if !ok {
+		return fmt.Errorf("verified attestation has no TLS key fingerprint")
 	}
 	spki, err := x509.MarshalPKIXPublicKey(cert.PublicKey)
 	if err != nil {
