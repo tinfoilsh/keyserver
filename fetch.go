@@ -29,8 +29,15 @@ type fetchRequest struct {
 	Document   json.RawMessage `json:"document"`
 }
 
+// attestationProof is what the server reads from a verified attestation document.
+type attestationProof interface {
+	CodeTag() string
+	Config() (verify.ConfigVerification, bool)
+	TLSPublicKeyFP() (string, bool)
+}
+
 type server struct {
-	verify func(document, nonce []byte, repo string) (*verify.Verification, error)
+	verify func(document, nonce []byte, repo string) (attestationProof, error)
 	policy *Policy
 	store  secretStore
 	nonces *nonceStore
@@ -73,14 +80,14 @@ func (s *server) handleFetch(w http.ResponseWriter, r *http.Request) {
 		s.deny(w, r, req.Repo, http.StatusForbidden, err)
 		return
 	}
-	if proof.Config != nil {
+	if _, ok := proof.Config(); ok {
 		s.deny(w, r, req.Repo, http.StatusForbidden, fmt.Errorf("keyserver policy requires a GitHub release; registry configs are not supported"))
 		return
 	}
-	name, workload := s.policy.Match(req.Repo, proof.CodeTag)
+	name, workload := s.policy.Match(req.Repo, proof.CodeTag())
 	if workload == nil {
 		s.deny(w, r, req.Repo, http.StatusForbidden,
-			fmt.Errorf("release %s@%s is not pinned by any workload", req.Repo, proof.CodeTag))
+			fmt.Errorf("release %s@%s is not pinned by any workload", req.Repo, proof.CodeTag()))
 		return
 	}
 	if err := verifyKeyBinding(r.TLS.PeerCertificates[0], proof); err != nil {
@@ -109,7 +116,7 @@ func (s *server) handleFetch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("release workload=%s release=%s@%s secrets=%v remote=%s",
-		name, req.Repo, proof.CodeTag, req.SecretRefs, r.RemoteAddr)
+		name, req.Repo, proof.CodeTag(), req.SecretRefs, r.RemoteAddr)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(secrets)
 }
@@ -119,7 +126,7 @@ func (s *server) handleFetch(w http.ResponseWriter, r *http.Request) {
 // captured or relayed attestation useless — the response only flows over a
 // channel keyed by the endorsed private key, which never leaves enclave
 // memory.
-func verifyKeyBinding(cert *x509.Certificate, proof *verify.Verification) error {
+func verifyKeyBinding(cert *x509.Certificate, proof attestationProof) error {
 	attestedFP, ok := proof.TLSPublicKeyFP()
 	if !ok {
 		return fmt.Errorf("verified attestation has no TLS key fingerprint")

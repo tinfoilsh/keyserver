@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/tinfoilsh/tinfoil-go/verify"
-	"github.com/tinfoilsh/tinfoil-go/verify/document"
 )
 
 // stubVerify stands in for the SDK's v3 verification, enforcing the same
@@ -35,7 +34,24 @@ type stubDocument struct {
 	TLSKeyFP string `json:"tls_key_fp"`
 }
 
-func stubVerify(raw, nonce []byte, repo string) (*verify.Verification, error) {
+type stubProof struct {
+	tag      string
+	tlsKeyFP string
+	config   *verify.ConfigVerification
+}
+
+func (p *stubProof) CodeTag() string { return p.tag }
+
+func (p *stubProof) Config() (verify.ConfigVerification, bool) {
+	if p.config == nil {
+		return verify.ConfigVerification{}, false
+	}
+	return *p.config, true
+}
+
+func (p *stubProof) TLSPublicKeyFP() (string, bool) { return p.tlsKeyFP, p.tlsKeyFP != "" }
+
+func stubVerify(raw, nonce []byte, repo string) (attestationProof, error) {
 	var doc stubDocument
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return nil, fmt.Errorf("stub: %w", err)
@@ -46,10 +62,7 @@ func stubVerify(raw, nonce []byte, repo string) (*verify.Verification, error) {
 	if doc.Repo != repo {
 		return nil, fmt.Errorf("stub: document does not authenticate as a release of %s", repo)
 	}
-	return &verify.Verification{
-		CodeTag:        doc.Tag,
-		CryptoMaterial: []document.CryptoMaterialItem{{ID: document.CryptoMaterialIDTLS, Format: document.KeySPKIFPSHA256V1Format, Data: doc.TLSKeyFP}},
-	}, nil
+	return &stubProof{tag: doc.Tag, tlsKeyFP: doc.TLSKeyFP}, nil
 }
 
 // mapStore is an in-memory secretStore for tests: {path: {field: value}}.
@@ -354,13 +367,13 @@ func TestFetchRejectsUnpinnedTag(t *testing.T) {
 
 func TestFetchRejectsRegistryConfigWithPinnedRuntimeTag(t *testing.T) {
 	ts := startGatewayWith(t, &server{
-		verify: func(raw, nonce []byte, repo string) (*verify.Verification, error) {
-			proof, err := stubVerify(raw, nonce, repo)
+		verify: func(raw, nonce []byte, repo string) (attestationProof, error) {
+			verified, err := stubVerify(raw, nonce, repo)
 			if err != nil {
 				return nil, err
 			}
-			proof.Config = &verify.ConfigVerification{Name: "/org/hello/v2.0.0"}
-			return proof, nil
+			verified.(*stubProof).config = &verify.ConfigVerification{Name: "/org/hello/v2.0.0"}
+			return verified, nil
 		},
 		policy: testPolicy(),
 		store:  mapStore{"hello/demo": {"value": "hunter2"}},

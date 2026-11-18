@@ -55,7 +55,13 @@ func main() {
 		log.Fatalf("keyserver: %v", err)
 	}
 	gateway := &server{
-		verify: verifier.VerifyV3,
+		verify: func(document, nonce []byte, repo string) (attestationProof, error) {
+			verified, err := verifier.VerifyV3(document, nonce, verify.Pin{Repo: repo})
+			if err != nil {
+				return nil, err
+			}
+			return verified, nil
+		},
 		policy: policy,
 		store:  store,
 		nonces: newNonceStore(),
